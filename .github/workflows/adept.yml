@@ -36,10 +36,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          # SEMENTARA: paksa "true" di setiap run (termasuk /15 menit) supaya tiap
-          # tick cron kelihatan nyata di Telegram sebagai bukti scheduler jalan.
-          # TODO: kembalikan ke kondisi digest 2x/hari setelah terbukti.
-          IS_DAILY_DIGEST: "true"
+          IS_DAILY_DIGEST: ${{ (github.event.schedule == '6 23 * * *' || github.event.schedule == '6 11 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
         run: python adept_check.py
 
       - name: Simpan perubahan state
