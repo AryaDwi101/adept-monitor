@@ -3,7 +3,13 @@ name: Cek Form ADEPT
 on:
   schedule:
     - cron: "*/15 * * * *"   # tiap 15 menit (waktu UTC; jeda bisa molor saat GitHub sibuk)
+    - cron: "0 23 * * *"     # ringkasan harian: 23:00 UTC = 06:00 WIB
   workflow_dispatch:          # tombol jalankan manual di tab Actions
+    inputs:
+      force_digest:
+        description: "Paksa kirim ringkasan harian (buat testing)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write             # agar bisa commit balik file state
@@ -27,6 +33,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          IS_DAILY_DIGEST: ${{ (github.event.schedule == '0 23 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
         run: python adept_check.py
 
       - name: Simpan perubahan state

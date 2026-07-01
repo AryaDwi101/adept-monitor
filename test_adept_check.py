@@ -9,6 +9,9 @@ Skenario yang diuji:
   2. Transisi tutup -> buka (dengan tanggal baru) -> HARUS kirim notif.
   3. Sudah buka, tanggal berubah lagi -> HARUS kirim notif.
   4. Sudah buka, tanggal sama -> TIDAK boleh kirim notif (no-op run).
+  5. Mode ringkasan harian, tidak ada perubahan -> tetap HARUS kirim 1 pesan ringkasan
+     berisi status semua hari + link, tanpa memicu notif "BUKA" individual.
+  6. Mode biasa (bukan ringkasan harian), tidak ada perubahan -> TIDAK ada pesan ringkasan.
 """
 
 import json
@@ -19,12 +22,18 @@ from unittest import mock
 import adept_check
 
 
-def run_case(name, fake_state, fake_results, expect_notif_for):
+def run_case(name, fake_state, fake_results, expect_notif_for, is_digest=False, expect_digest=None):
     """
     fake_state: dict lama untuk ditulis ke STATE_FILE sebelum run (atau None = tidak ada file sama sekali)
     fake_results: dict {hari: (is_open, title)} yang akan dikembalikan check_form()
-    expect_notif_for: set hari yang SEHARUSNYA memicu notif Telegram
+    expect_notif_for: set hari yang SEHARUSNYA memicu notif Telegram "BUKA"
+    is_digest: simulasikan IS_DAILY_DIGEST=true (ringkasan harian dari workflow)
+    expect_digest: True/False apakah pesan ringkasan harian seharusnya terkirim
+                   (default: sama dengan is_digest)
     """
+    if expect_digest is None:
+        expect_digest = is_digest
+
     with tempfile.TemporaryDirectory() as tmpdir:
         state_path = os.path.join(tmpdir, "adept_state.json")
 
@@ -45,20 +54,25 @@ def run_case(name, fake_state, fake_results, expect_notif_for):
 
         with mock.patch.object(adept_check, "STATE_FILE", state_path), \
              mock.patch.object(adept_check, "check_form", side_effect=fake_check_form), \
-             mock.patch.object(adept_check, "send_telegram", side_effect=fake_send_telegram):
+             mock.patch.object(adept_check, "send_telegram", side_effect=fake_send_telegram), \
+             mock.patch.object(adept_check, "IS_DAILY_DIGEST", is_digest):
             adept_check.main()
 
         notified_hari = set()
+        digest_sent = False
         for text in sent:
+            if text.startswith("\U0001F4CB Ringkasan Harian ADEPT"):
+                digest_sent = True
+                continue
             for hari in adept_check.FORMS:
                 if f"ADEPT {hari} BUKA" in text:
                     notified_hari.add(hari)
 
-        ok = notified_hari == expect_notif_for
+        ok = (notified_hari == expect_notif_for) and (digest_sent == expect_digest)
         status = "PASS" if ok else "FAIL"
         print(f"[{status}] {name}")
-        print(f"    expect notif: {expect_notif_for or '(tidak ada)'}")
-        print(f"    actual notif: {notified_hari or '(tidak ada)'}")
+        print(f"    expect notif: {expect_notif_for or '(tidak ada)'} | expect ringkasan: {expect_digest}")
+        print(f"    actual notif: {notified_hari or '(tidak ada)'} | actual ringkasan: {digest_sent}")
         if sent:
             for t in sent:
                 print(f"    -> pesan: {t.splitlines()[0]}")
@@ -133,6 +147,36 @@ def main():
             "Jumat": (False, "tutup"),
         },
         expect_notif_for=set(),
+    )
+    results.append(ok)
+
+    # --- Kasus 5: mode ringkasan harian, tidak ada perubahan -> tetap kirim 1 pesan ringkasan ---
+    ok, state5 = run_case(
+        "Ringkasan harian, tidak ada perubahan - HARUS kirim ringkasan, TIDAK ada notif BUKA individual",
+        fake_state=same_state,
+        fake_results={
+            "Selasa": (True, "Pendaftaran Tes ADEPT Online (Selasa, 14 Juli 2026)"),
+            "Rabu": (False, "tutup"),
+            "Jumat": (False, "tutup"),
+        },
+        expect_notif_for=set(),
+        is_digest=True,
+        expect_digest=True,
+    )
+    results.append(ok)
+
+    # --- Kasus 6: bukan mode ringkasan harian, tidak ada perubahan -> tidak ada pesan apapun ---
+    ok, state6 = run_case(
+        "Bukan ringkasan harian, tidak ada perubahan - TIDAK ada pesan sama sekali",
+        fake_state=same_state,
+        fake_results={
+            "Selasa": (True, "Pendaftaran Tes ADEPT Online (Selasa, 14 Juli 2026)"),
+            "Rabu": (False, "tutup"),
+            "Jumat": (False, "tutup"),
+        },
+        expect_notif_for=set(),
+        is_digest=False,
+        expect_digest=False,
     )
     results.append(ok)
 
