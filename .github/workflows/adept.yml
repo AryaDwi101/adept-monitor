@@ -2,9 +2,11 @@ name: Cek Form ADEPT
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # tiap 15 menit (waktu UTC; jeda bisa molor saat GitHub sibuk)
-    - cron: "0 23 * * *"     # ringkasan harian pagi: 23:00 UTC = 06:00 WIB
-    - cron: "0 11 * * *"     # ringkasan harian sore: 11:00 UTC = 18:00 WIB
+    # Menit sengaja digeser dari :00/:15/:30/:45 - itu titik tersibuk di seluruh
+    # GitHub Actions dan cron sering telat/di-skip total kalau jatuh persis di situ.
+    - cron: "6,21,36,51 * * * *"   # tiap 15 menit (offset 6 menit dari jam bulat)
+    - cron: "6 23 * * *"           # ringkasan harian pagi: 23:06 UTC = 06:06 WIB
+    - cron: "6 11 * * *"           # ringkasan harian sore: 11:06 UTC = 18:06 WIB
   workflow_dispatch:          # tombol jalankan manual di tab Actions
     inputs:
       force_digest:
@@ -34,7 +36,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          IS_DAILY_DIGEST: ${{ (github.event.schedule == '0 23 * * *' || github.event.schedule == '0 11 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
+          IS_DAILY_DIGEST: ${{ (github.event.schedule == '6 23 * * *' || github.event.schedule == '6 11 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
         run: python adept_check.py
 
       - name: Simpan perubahan state
