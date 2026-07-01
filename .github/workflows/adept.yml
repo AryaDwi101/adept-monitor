@@ -36,7 +36,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          IS_DAILY_DIGEST: ${{ (github.event.schedule == '6 23 * * *' || github.event.schedule == '6 11 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
+          # SEMENTARA: paksa true utk 1x verifikasi manual bahwa cron-job.org -> Actions -> Telegram jalan end-to-end.
+          # TODO: revert ke kondisi digest 2x/hari setelah user konfirmasi pesan masuk.
+          IS_DAILY_DIGEST: "true"
         run: python adept_check.py
 
       - name: Simpan perubahan state
