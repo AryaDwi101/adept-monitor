@@ -36,3 +36,4 @@ jobs:
           git add adept_state.json
           git commit -m "update state ADEPT" || echo "tidak ada perubahan"
           git push || echo "tidak ada yang di-push"
+
