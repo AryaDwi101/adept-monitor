@@ -2,12 +2,14 @@ name: Cek Form ADEPT
 
 on:
   schedule:
-    # Menit sengaja digeser dari :00/:15/:30/:45 - itu titik tersibuk di seluruh
-    # GitHub Actions dan cron sering telat/di-skip total kalau jatuh persis di situ.
+    # Cadangan tipis-tipis kalau-kalau scheduler internal GitHub hidup lagi - aman
+    # didobel krn hasilnya idempotent (state sudah sama, tidak akan re-notif).
+    # SENGAJA TIDAK ADA jadwal khusus utk ringkasan harian di sini: scheduler internal
+    # GitHub terbukti bisa telat berjam-jam (lihat commit riwayat), yang kalau dipakai
+    # utk trigger ringkasan bikin pesan dobel di jam acak. Ringkasan harian sepenuhnya
+    # diserahkan ke cron-job.org (job "morning"/"afternoon") yg presisi lewat force_digest.
     - cron: "6,21,36,51 * * * *"   # tiap 15 menit (offset 6 menit dari jam bulat)
-    - cron: "6 23 * * *"           # ringkasan harian pagi: 23:06 UTC = 06:06 WIB
-    - cron: "6 11 * * *"           # ringkasan harian sore: 11:06 UTC = 18:06 WIB
-  workflow_dispatch:          # tombol jalankan manual di tab Actions
+  workflow_dispatch:          # tombol jalankan manual di tab Actions / dipanggil cron-job.org
     inputs:
       force_digest:
         description: "Paksa kirim ringkasan harian (buat testing)"
@@ -36,7 +38,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          IS_DAILY_DIGEST: ${{ (github.event.schedule == '6 23 * * *' || github.event.schedule == '6 11 * * *' || github.event.inputs.force_digest == 'true') && 'true' || 'false' }}
+          IS_DAILY_DIGEST: ${{ github.event.inputs.force_digest == 'true' && 'true' || 'false' }}
         run: python adept_check.py
 
       - name: Simpan perubahan state
