@@ -40,7 +40,12 @@ def check_form(url):
     # TUTUP/PENUH bila diarahkan ke 'closedform' atau ada teks "sudah penuh".
     is_closed = final_url.endswith("closedform") or ("sudah penuh" in html.lower())
     m = re.search(r'<meta property="og:title" content="([^"]+)"', html)
-    title = m.group(1).strip() if m else "(judul tidak ditemukan)"
+    if not m:
+        # Form yang valid (baik buka maupun tutup) selalu punya og:title.
+        # Kalau tidak ketemu, halaman yang kefetch bukan form asli (glitch/error
+        # sesaat di sisi Google) - jangan percaya is_open, anggap gagal saja.
+        raise ValueError(f"og:title tidak ditemukan (final_url={r.url})")
+    title = m.group(1).strip()
     return (not is_closed, title)
 
 

@@ -12,6 +12,10 @@ Skenario yang diuji:
   5. Mode ringkasan harian, tidak ada perubahan -> tetap HARUS kirim 1 pesan ringkasan
      berisi status semua hari + link, tanpa memicu notif "BUKA" individual.
   6. Mode biasa (bukan ringkasan harian), tidak ada perubahan -> TIDAK ada pesan ringkasan.
+  7. check_form gagal ambil og:title (glitch/error sesaat Google) -> TIDAK boleh notif,
+     state hari itu TIDAK berubah dari state lama (bukti kejadian 2-3 Juli 2026: form
+     kebaca "BUKA" dengan judul "tidak ditemukan" gara-gara halaman error sesaat, lalu
+     balik normal 15 menit kemudian - seharusnya tidak pernah memicu notif palsu).
 """
 
 import json
@@ -80,6 +84,57 @@ def run_case(name, fake_state, fake_results, expect_notif_for, is_digest=False, 
         with open(state_path, encoding="utf-8") as f:
             new_state = json.load(f)
         return ok, new_state
+
+
+def run_case_error(name, fake_state, fake_results):
+    """
+    fake_results: dict {hari: (is_open, title) ATAU instance Exception}
+    Verifikasi: hari yang exception -> TIDAK ada notif sama sekali, dan state
+    utk hari itu TETAP sama seperti fake_state (tidak ditimpa data yang meragukan).
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        state_path = os.path.join(tmpdir, "adept_state.json")
+        with open(state_path, "w", encoding="utf-8") as f:
+            json.dump(fake_state, f)
+
+        sent = []
+
+        def fake_check_form(url):
+            for hari, u in adept_check.FORMS.items():
+                if u == url:
+                    val = fake_results[hari]
+                    if isinstance(val, Exception):
+                        raise val
+                    return val
+            raise AssertionError(f"URL tak dikenal: {url}")
+
+        def fake_send_telegram(text):
+            sent.append(text)
+
+        with mock.patch.object(adept_check, "STATE_FILE", state_path), \
+             mock.patch.object(adept_check, "check_form", side_effect=fake_check_form), \
+             mock.patch.object(adept_check, "send_telegram", side_effect=fake_send_telegram), \
+             mock.patch.object(adept_check, "IS_DAILY_DIGEST", False):
+            adept_check.main()
+
+        with open(state_path, encoding="utf-8") as f:
+            new_state = json.load(f)
+
+        errored_hari = {h for h, v in fake_results.items() if isinstance(v, Exception)}
+        ok = not sent  # tidak boleh ada notif/pesan apapun akibat hari yang error
+        for hari in errored_hari:
+            if new_state.get(hari) != fake_state.get(hari):
+                ok = False
+
+        status = "PASS" if ok else "FAIL"
+        print(f"[{status}] {name}")
+        print(f"    hari error: {errored_hari or '(tidak ada)'}")
+        print(f"    state sebelum: {fake_state}")
+        print(f"    state sesudah: {new_state}")
+        if sent:
+            for t in sent:
+                print(f"    -> pesan (harusnya TIDAK ADA): {t.splitlines()[0]}")
+        return ok
 
 
 def main():
@@ -177,6 +232,26 @@ def main():
         expect_notif_for=set(),
         is_digest=False,
         expect_digest=False,
+    )
+    results.append(ok)
+
+    # --- Kasus 7: og:title gagal ditemukan (glitch spt. kejadian 2-3 Juli 2026) ---
+    # Selasa & Rabu sedang "penuh/tutup" di state lama, tapi check_form gagal (halaman
+    # error sesaat, bukan closedform/viewform yang valid) -> tidak boleh notif,
+    # state Selasa & Rabu tidak boleh berubah. Jumat tetap diproses normal.
+    prior_state = {
+        "Selasa": {"is_open": False, "title": "Pendaftaran Tes ADEPT Online (Selasa, 7 Juli 2026)"},
+        "Rabu": {"is_open": False, "title": "Pendaftaran Tes ADEPT Online (Rabu, 8 Juli 2026 )"},
+        "Jumat": {"is_open": False, "title": "Pendaftaran Tes ADEPT Online (Jum&#39;at, 10 Juli 2026)"},
+    }
+    ok = run_case_error(
+        "og:title tidak ditemukan (glitch) - TIDAK boleh notif, state tidak berubah",
+        fake_state=prior_state,
+        fake_results={
+            "Selasa": ValueError("og:title tidak ditemukan (final_url=...)"),
+            "Rabu": ValueError("og:title tidak ditemukan (final_url=...)"),
+            "Jumat": (False, "Pendaftaran Tes ADEPT Online (Jum&#39;at, 10 Juli 2026)"),
+        },
     )
     results.append(ok)
 
