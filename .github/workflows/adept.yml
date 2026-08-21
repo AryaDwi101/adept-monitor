@@ -1,20 +1,18 @@
 name: Cek Form ADEPT
 
 on:
-  schedule:
-    # Cadangan tipis-tipis kalau-kalau scheduler internal GitHub hidup lagi - aman
-    # didobel krn hasilnya idempotent (state sudah sama, tidak akan re-notif).
-    # SENGAJA TIDAK ADA jadwal khusus utk ringkasan harian di sini: scheduler internal
-    # GitHub terbukti bisa telat berjam-jam (lihat commit riwayat), yang kalau dipakai
-    # utk trigger ringkasan bikin pesan dobel di jam acak. Ringkasan harian sepenuhnya
-    # diserahkan ke cron-job.org (job "morning"/"afternoon") yg presisi lewat force_digest.
-    - cron: "6,21,36,51 * * * *"   # tiap 15 menit (offset 6 menit dari jam bulat)
-  workflow_dispatch:          # tombol jalankan manual di tab Actions / dipanggil cron-job.org
-    inputs:
-      force_digest:
-        description: "Paksa kirim ringkasan harian (buat testing)"
-        type: boolean
-        default: false
+  # DINONAKTIFKAN (sudah tidak dipakai lagi, tugas ADEPT selesai).
+  # Semua trigger asli dikomentari di bawah - tinggal un-comment + hapus
+  # `workflow_call:` ini kalau suatu saat mau diaktifkan lagi.
+  workflow_call:
+  # schedule:
+  #   - cron: "6,21,36,51 * * * *"   # tiap 15 menit (offset 6 menit dari jam bulat)
+  # workflow_dispatch:          # tombol jalankan manual di tab Actions / dipanggil cron-job.org
+  #   inputs:
+  #     force_digest:
+  #       description: "Paksa kirim ringkasan harian (buat testing)"
+  #       type: boolean
+  #       default: false
 
 permissions:
   contents: write             # agar bisa commit balik file state
